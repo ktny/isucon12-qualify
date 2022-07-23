@@ -1558,7 +1558,11 @@ app.post(
       }
 
       const keyFilename = getEnv('ISUCON_JWT_KEY_FILE', '../public.pem')
-      cachedCert = await readFile(keyFilename)
+      try {
+        cachedCert = await readFile(keyFilename)
+      } catch (e) {
+        console.log(e)
+      }
 
       res.status(200).json({
         status: true,
