@@ -90,28 +90,13 @@ async function createTenantDB(id: number): Promise<Error | undefined> {
   }
 }
 
+const initID = 2678400000
+
 // システム全体で一意なIDを生成する
 async function dispenseID(): Promise<string> {
-  let id = 0
-  let lastErr: any
-  for (const _ of Array(100)) {
-    try {
-      const [result] = await adminDB.execute<OkPacket>('REPLACE INTO id_generator (stub) VALUES (?)', ['a'])
-
-      id = result.insertId
-      break
-    } catch (error: any) {
-      // deadlock
-      if (error.errno && error.errno === 1213) {
-        lastErr = error
-      }
-    }
-  }
-  if (id !== 0) {
-    return id.toString(16)
-  }
-
-  throw new Error(`error REPLACE INTO id_generator: ${lastErr.toString()}`)
+  const [s, ns] = process.hrtime()
+  const id = initID + Number(`${s}${ns}`)
+  return id.toString(16)
 }
 
 // カスタムエラーハンドラにステータスコード拾ってもらうエラー型
@@ -293,6 +278,8 @@ const wrap =
   (req, res, next) =>
     fn(req, res, next).catch(next)
 
+let cachedCert: Buffer
+
 // リクエストヘッダをパースしてViewerを返す
 async function parseViewer(req: Request): Promise<Viewer> {
   const tokenStr = req.cookies[cookieName]
@@ -300,12 +287,9 @@ async function parseViewer(req: Request): Promise<Viewer> {
     throw new ErrorWithStatus(401, `cookie ${cookieName} is not found`)
   }
 
-  const keyFilename = getEnv('ISUCON_JWT_KEY_FILE', '../public.pem')
-  const cert = await readFile(keyFilename)
-
   let token: jwt.JwtPayload
   try {
-    token = jwt.verify(tokenStr, cert, {
+    token = jwt.verify(tokenStr, cachedCert, {
       algorithms: ['RS256'],
     }) as jwt.JwtPayload
   } catch (error) {
@@ -359,6 +343,8 @@ async function parseViewer(req: Request): Promise<Viewer> {
   }
 }
 
+const tenants = new Map<string, TenantRow>()
+
 async function retrieveTenantRowFromHeader(req: Request): Promise<TenantRow | undefined> {
   // JWTに入っているテナント名とHostヘッダのテナント名が一致しているか確認
   const baseHost = getEnv('ISUCON_BASE_HOSTNAME', '.t.isucon.dev')
@@ -375,10 +361,7 @@ async function retrieveTenantRowFromHeader(req: Request): Promise<TenantRow | un
 
   // テナントの存在確認
   try {
-    const [[tenantRow]] = await adminDB.query<(TenantRow & RowDataPacket)[]>('SELECT * FROM tenant WHERE name = ?', [
-      tenantName,
-    ])
-    return tenantRow
+    return tenants.get(tenantName)
   } catch (error) {
     throw new Error(`failed to Select tenant: name=${tenantName}, ${error}`)
   }
@@ -507,6 +490,9 @@ app.post(
             billing: 0,
           },
         }
+
+        tenants.set(name, { id, name, display_name, created_at: now, updated_at: now})
+
         res.status(200).json({
           status: true,
           data,
@@ -1322,13 +1308,10 @@ app.get(
         }
 
         const now = Math.floor(new Date().getTime() / 1000)
-        const [[tenant]] = await adminDB.query<(TenantRow & RowDataPacket)[]>('SELECT * FROM tenant WHERE id = ?', [
-          viewer.tenantId,
-        ])
 
-        await adminDB.execute<OkPacket>(
+        adminDB.execute<OkPacket>(
           'INSERT INTO visit_history (player_id, tenant_id, competition_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
-          [viewer.playerId, tenant.id, competitionId, now, now]
+          [viewer.playerId, viewer.tenantId, competitionId, now, now]
         )
 
         const { rank_after: rankAfterStr } = req.query
@@ -1338,7 +1321,7 @@ app.get(
         }
 
         // player_scoreを読んでいるときに更新が走ると不整合が起こるのでロックを取得する
-        const unlock = await flockByTenantID(tenant.id)
+        const unlock = await flockByTenantID(viewer.tenantId)
         try {
           const playerScores = await tenantDB.all<{
             player_id: string
@@ -1346,8 +1329,9 @@ app.get(
             score: number
             score_row_num: number
           }[]>(
-            'SELECT p.id AS player_id, p.display_name AS player_display_name, ps.score AS score, ps.row_num AS score_row_num FROM player AS p INNER JOIN player_score AS ps ON p.id = ps.player_id WHERE p.tenant_id = ? AND ps.competition_id = ? ORDER BY row_num DESC',
-            tenant.id,
+            'SELECT p.id AS player_id, p.display_name AS player_display_name, ps.score AS score, ps.row_num AS score_row_num FROM player AS p INNER JOIN player_score AS ps ON p.id = ps.player_id WHERE p.tenant_id = ? AND ps.tenant_id = ? AND ps.competition_id = ? ORDER BY row_num DESC',
+            viewer.tenantId,
+            viewer.tenantId,
             competition.id
           )
 
@@ -1530,6 +1514,20 @@ app.post(
       const data: InitializeResult = {
         lang: 'node',
       }
+
+      tenants.clear()
+      const [tenantRows] = await adminDB.query<(TenantRow & RowDataPacket)[]>('SELECT * FROM tenant')
+      for (const row of tenantRows) {
+        tenants.set(row.name, row)
+      }
+
+      const keyFilename = getEnv('ISUCON_JWT_KEY_FILE', '../public.pem')
+      try {
+        cachedCert = await readFile(keyFilename)
+      } catch (e) {
+        console.log(e)
+      }
+
       res.status(200).json({
         status: true,
         data,
