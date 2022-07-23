@@ -20,12 +20,12 @@ mysql -u"$ISUCON_DB_USER" \
 rm -f ../tenant_db/*.db
 cp -r ../../initial_data/*.db ../tenant_db/
 
-# 一部をSQLiteからMySQLに移行
-./sqlite3-to-mysql.sh
-
 # インデックス追加など
 mysql -u"$ISUCON_DB_USER" \
 		-p"$ISUCON_DB_PASSWORD" \
 		--host "$ISUCON_DB_HOST" \
 		--port "$ISUCON_DB_PORT" \
-		"$ISUCON_DB_NAME" < patch.sql
+		"$ISUCON_DB_NAME" < ./tenant/10_schema.sql
+
+# 一部をSQLiteからMySQLに移行
+./sqlite3-to-mysql.sh
