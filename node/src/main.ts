@@ -542,6 +542,19 @@ async function billingReportByCompetition(
   tenantId: number,
   competition: CompetitionRow
 ): Promise<BillingReport> {
+  // 大会が終了していない場合は請求金額が確定しない
+  if (!competition.finished_at) {
+    return {
+      competition_id: competition.id,
+      competition_title: competition.title,
+      player_count: 0,
+      visitor_count: 0,
+      billing_player_yen: 0,
+      billing_visitor_yen: 0,
+      billing_yen: 0,
+    }
+  }
+
   // ランキングにアクセスした参加者のIDを取得する
   const [vhs] = await adminDB.query<(VisitHistorySummaryRow & RowDataPacket)[]>(
     'SELECT player_id, MIN(created_at) AS min_created_at FROM visit_history WHERE tenant_id = ? AND competition_id = ? GROUP BY player_id',
