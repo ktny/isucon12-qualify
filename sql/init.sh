@@ -28,4 +28,4 @@ mysql -u"$ISUCON_DB_USER" \
 		"$ISUCON_DB_NAME" < ./tenant/10_schema.sql
 
 # 一部をSQLiteからMySQLに移行
-./sqlite3-to-mysql.sh
+# ./sqlite3-to-mysql.sh
