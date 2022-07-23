@@ -1361,12 +1361,6 @@ app.get(
         // player_scoreを読んでいるときに更新が走ると不整合が起こるのでロックを取得する
         const unlock = await flockByTenantID(tenant.id)
         try {
-          const pss = await tenantDB.all<PlayerScoreRow[]>(
-            'SELECT * FROM player_score WHERE tenant_id = ? AND competition_id = ? ORDER BY row_num DESC',
-            tenant.id,
-            competition.id
-          )
-
           const playerScores = await tenantDB.all<{
             player_id: string
             player_display_name: string
