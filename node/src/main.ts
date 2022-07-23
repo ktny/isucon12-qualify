@@ -1367,28 +1367,36 @@ app.get(
             competition.id
           )
 
+          const playerScores = await tenantDB.all<{
+            player_id: string
+            player_display_name: string
+            score: number
+            score_row_num: number
+          }[]>(
+            'SELECT p.id AS player_id, p.display_name AS player_display_name, ps.score AS score, ps.row_num AS score_row_num FROM player AS p INNER JOIN player_score AS ps ON p.id = ps.player_id WHERE p.tenant_id = ? AND ps.competition_id = ? ORDER BY row_num DESC',
+            tenant.id,
+            competition.id
+          )
+
           const scoredPlayerSet: { [player_id: string]: number } = {}
           const tmpRanks: (CompetitionRank & WithRowNum)[] = []
-          for (const ps of pss) {
+
+          playerScores.forEach(ps => {
             // player_scoreが同一player_id内ではrow_numの降順でソートされているので
             // 現れたのが2回目以降のplayer_idはより大きいrow_numでスコアが出ているとみなせる
             if (scoredPlayerSet[ps.player_id]) {
-              continue
+              return
             }
             scoredPlayerSet[ps.player_id] = 1
-            const p = await retrievePlayer(tenantDB, ps.player_id)
-            if (!p) {
-              throw new Error('error retrievePlayer')
-            }
 
             tmpRanks.push({
               rank: 0,
               score: ps.score,
-              player_id: p.id,
-              player_display_name: p.display_name,
-              row_num: ps.row_num,
+              player_id: ps.player_id,
+              player_display_name: ps.player_display_name,
+              row_num: ps.score_row_num,
             })
-          }
+          })
 
           tmpRanks.sort((a, b) => {
             if (a.score === b.score) {
