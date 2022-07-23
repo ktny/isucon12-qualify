@@ -477,13 +477,40 @@ app.post(
 
       const now = Math.floor(new Date().getTime() / 1000)
       let id: number
+
+      const con = await adminDB.getConnection()
+
       try {
-        const [result] = await adminDB.execute<OkPacket>(
+        await con.beginTransaction()
+
+        const [result] = await con.query<OkPacket>(
           'INSERT INTO tenant (name, display_name, created_at, updated_at) VALUES (?, ?, ?, ?)',
           [name, display_name, now, now]
         )
+
         id = result.insertId
+
+        const error = await createTenantDB(id)
+        if (error) {
+          throw new Error(`error createTenantDB: id=${id} name=${name}, ${error}`)
+        }
+
+        await con.commit()
+
+        const data: TenantsAddResult = {
+          tenant: {
+            id: id.toString(),
+            name,
+            display_name,
+            billing: 0,
+          },
+        }
+        res.status(200).json({
+          status: true,
+          data,
+        })
       } catch (error: any) {
+        await con.rollback()
         // duplicate entry
         if (error.errno && error.errno === 1062) {
           throw new ErrorWithStatus(400, 'duplicate tenant')
@@ -492,27 +519,6 @@ app.post(
           `error Insert tenant: name=${name}, displayName=${display_name}, createdAt=${now}, updatedAt=${now}, ${error}`
         )
       }
-
-      // NOTE: 先にadminDBに書き込まれることでこのAPIの処理中に
-      //       /api/admin/tenants/billingにアクセスされるとエラーになりそう
-      //       ロックなどで対処したほうが良さそう
-      const error = await createTenantDB(id)
-      if (error) {
-        throw new Error(`error createTenantDB: id=${id} name=${name}, ${error}`)
-      }
-
-      const data: TenantsAddResult = {
-        tenant: {
-          id: id.toString(),
-          name,
-          display_name,
-          billing: 0,
-        },
-      }
-      res.status(200).json({
-        status: true,
-        data,
-      })
     } catch (error: any) {
       if (error.status) {
         throw error // rethrow
