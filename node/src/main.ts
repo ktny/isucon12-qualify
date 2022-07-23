@@ -90,15 +90,16 @@ async function createTenantDB(id: number): Promise<Error | undefined> {
   }
 }
 
+const initID = 2678400000
+
 // システム全体で一意なIDを生成する
 async function dispenseID(): Promise<string> {
   let id = 0
   let lastErr: any
   for (const _ of Array(100)) {
     try {
-      const [result] = await adminDB.execute<OkPacket>('REPLACE INTO id_generator (stub) VALUES (?)', ['a'])
-
-      id = result.insertId
+      const [s, ns] = process.hrtime()
+      id = initID + Number(`${s}${ns}`)
       break
     } catch (error: any) {
       // deadlock
