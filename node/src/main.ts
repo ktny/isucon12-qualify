@@ -540,23 +540,18 @@ function validateTenantName(name: string): boolean {
 async function billingReportByCompetition(
   tenantDB: Database,
   tenantId: number,
-  competitionId: string
+  competition: CompetitionRow
 ): Promise<BillingReport> {
-  const comp = await retrieveCompetition(tenantDB, competitionId)
-  if (!comp) {
-    throw Error('error retrieveCompetition on billingReportByCompetition')
-  }
-
   // ランキングにアクセスした参加者のIDを取得する
   const [vhs] = await adminDB.query<(VisitHistorySummaryRow & RowDataPacket)[]>(
     'SELECT player_id, MIN(created_at) AS min_created_at FROM visit_history WHERE tenant_id = ? AND competition_id = ? GROUP BY player_id',
-    [tenantId, comp.id]
+    [tenantId, competition.id]
   )
 
   const billingMap: { [playerId: string]: 'player' | 'visitor' } = {}
   for (const vh of vhs) {
     // competition.finished_atよりもあとの場合は、終了後に訪問したとみなして大会開催内アクセス済みとみなさない
-    if (comp.finished_at !== null && comp.finished_at < vh.min_created_at) {
+    if (competition.finished_at !== null && competition.finished_at < vh.min_created_at) {
       continue
     }
     billingMap[vh.player_id] = 'visitor'
@@ -569,7 +564,7 @@ async function billingReportByCompetition(
     const scoredPlayerIds = await tenantDB.all<{ player_id: string }[]>(
       'SELECT DISTINCT(player_id) FROM player_score WHERE tenant_id = ? AND competition_id = ?',
       tenantId,
-      comp.id
+      competition.id
     )
     for (const pid of scoredPlayerIds) {
       // スコアが登録されている参加者
@@ -581,7 +576,7 @@ async function billingReportByCompetition(
       player: 0,
       visitor: 0,
     }
-    if (comp.finished_at) {
+    if (competition.finished_at) {
       for (const category of Object.values(billingMap)) {
         switch (category) {
           case 'player':
@@ -595,8 +590,8 @@ async function billingReportByCompetition(
     }
 
     return {
-      competition_id: comp.id,
-      competition_title: comp.title,
+      competition_id: competition.id,
+      competition_title: competition.title,
       player_count: counts.player,
       visitor_count: counts.visitor,
       billing_player_yen: 100 * counts.player,
@@ -604,7 +599,7 @@ async function billingReportByCompetition(
       billing_yen: 100 * counts.player + 10 * counts.visitor,
     }
   } catch (error) {
-    throw new Error(`error Select count player_score: tenantId=${tenantId}, competitionId=${comp.id}, ${error}`)
+    throw new Error(`error Select count player_score: tenantId=${tenantId}, competitionId=${competition.id}, ${error}`)
   } finally {
     unlock()
   }
@@ -668,7 +663,7 @@ app.get(
           )
 
           for (const comp of competitions) {
-            const report = await billingReportByCompetition(tenantDB, tenant.id, comp.id)
+            const report = await billingReportByCompetition(tenantDB, tenant.id, comp)
             tb.billing += report.billing_yen
           }
         } finally {
@@ -1140,7 +1135,7 @@ app.get(
         )
 
         for (const comp of competitions) {
-          const report = await billingReportByCompetition(tenantDB, viewer.tenantId, comp.id)
+          const report = await billingReportByCompetition(tenantDB, viewer.tenantId, comp)
           reports.push(report)
         }
       } finally {
