@@ -19,7 +19,7 @@ CREATE TABLE `id_generator` (
   `stub` CHAR(1) NOT NULL DEFAULT '',
   PRIMARY KEY  (`id`),
   UNIQUE KEY `stub` (`stub`)
-) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4;
+) ENGINE=MyISAM DEFAULT CHARACTER SET=utf8mb4;
 
 CREATE TABLE `visit_history` (
   `player_id` VARCHAR(255) NOT NULL,
