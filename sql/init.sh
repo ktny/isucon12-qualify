@@ -22,3 +22,10 @@ cp -r ../../initial_data/*.db ../tenant_db/
 
 # 一部をSQLiteからMySQLに移行
 ./sqlite3-to-mysql.sh
+
+# インデックス追加など
+mysql -u"$ISUCON_DB_USER" \
+		-p"$ISUCON_DB_PASSWORD" \
+		--host "$ISUCON_DB_HOST" \
+		--port "$ISUCON_DB_PORT" \
+		"$ISUCON_DB_NAME" < patch.sql
