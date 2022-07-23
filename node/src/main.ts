@@ -1342,13 +1342,10 @@ app.get(
         }
 
         const now = Math.floor(new Date().getTime() / 1000)
-        const [[tenant]] = await adminDB.query<(TenantRow & RowDataPacket)[]>('SELECT * FROM tenant WHERE id = ?', [
-          viewer.tenantId,
-        ])
 
-        await adminDB.execute<OkPacket>(
+        adminDB.execute<OkPacket>(
           'INSERT INTO visit_history (player_id, tenant_id, competition_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
-          [viewer.playerId, tenant.id, competitionId, now, now]
+          [viewer.playerId, viewer.tenantId, competitionId, now, now]
         )
 
         const { rank_after: rankAfterStr } = req.query
@@ -1358,7 +1355,7 @@ app.get(
         }
 
         // player_scoreを読んでいるときに更新が走ると不整合が起こるのでロックを取得する
-        const unlock = await flockByTenantID(tenant.id)
+        const unlock = await flockByTenantID(viewer.tenantId)
         try {
           const playerScores = await tenantDB.all<{
             player_id: string
@@ -1366,8 +1363,9 @@ app.get(
             score: number
             score_row_num: number
           }[]>(
-            'SELECT p.id AS player_id, p.display_name AS player_display_name, ps.score AS score, ps.row_num AS score_row_num FROM player AS p INNER JOIN player_score AS ps ON p.id = ps.player_id WHERE p.tenant_id = ? AND ps.competition_id = ? ORDER BY row_num DESC',
-            tenant.id,
+            'SELECT p.id AS player_id, p.display_name AS player_display_name, ps.score AS score, ps.row_num AS score_row_num FROM player AS p INNER JOIN player_score AS ps ON p.id = ps.player_id WHERE p.tenant_id = ? AND ps.tenant_id = ? AND ps.competition_id = ? ORDER BY row_num DESC',
+            viewer.tenantId,
+            viewer.tenantId,
             competition.id
           )
 
