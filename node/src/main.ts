@@ -675,7 +675,7 @@ app.get(
             tb.billing += report.billing_yen
           }
         } finally {
-          tenantDB.close()
+//          tenantDB.close()
         }
 
         tenantBillings.push(tb)
@@ -731,7 +731,7 @@ app.get(
       } catch (error) {
         throw new Error(`error Select player, tenant_id=${viewer.tenantId}: ${error}`)
       } finally {
-        tenantDB.close()
+//        tenantDB.close()
       }
 
       const data: PlayersListResult = {
@@ -795,7 +795,7 @@ app.post(
           })
         }
       } finally {
-        tenantDB.close()
+//        tenantDB.close()
       }
 
       const data: PlayersAddResult = {
@@ -858,7 +858,7 @@ app.post(
         }
         throw error
       } finally {
-        tenantDB.close()
+//        tenantDB.close()
       }
 
       const data: PlayerDisqualifiedResult = {
@@ -910,7 +910,7 @@ app.post(
           `error Insert competition: id=${id}, tenant_id=${viewer.tenantId}, title=${title}, finishedAt=null, createdAt=${now}, updatedAt=${now}, ${error}`
         )
       } finally {
-        tenantDB.close()
+//        tenantDB.close()
       }
 
       const data: CompetitionsAddResult = {
@@ -966,7 +966,7 @@ app.post(
           competitionId
         )
       } finally {
-        tenantDB.close()
+//        tenantDB.close()
       }
 
       res.status(200).json({
@@ -1102,7 +1102,7 @@ app.post(
         }
         throw error
       } finally {
-        tenantDB.close()
+//        tenantDB.close()
       }
 
       const data: ScoreResult = {
@@ -1147,7 +1147,7 @@ app.get(
           reports.push(report)
         }
       } finally {
-        tenantDB.close()
+//        tenantDB.close()
       }
 
       const data: BillingResult = {
@@ -1210,7 +1210,7 @@ app.get(
       try {
         await competitionsHandler(req, res, viewer, tenantDB)
       } finally {
-        tenantDB.close()
+//        tenantDB.close()
       }
     } catch (error: any) {
       if (error.status) {
@@ -1294,7 +1294,7 @@ app.get(
           unlock()
         }
       } finally {
-        tenantDB.close()
+//        tenantDB.close()
       }
 
       const data: PlayerResult = {
@@ -1419,7 +1419,7 @@ app.get(
           unlock()
         }
       } finally {
-        tenantDB.close()
+//        tenantDB.close()
       }
 
       const data: CompetitionRankingResult = {
@@ -1460,7 +1460,7 @@ app.get(
 
         await competitionsHandler(req, res, viewer, tenantDB)
       } finally {
-        tenantDB.close()
+//        tenantDB.close()
       }
     } catch (error: any) {
       if (error.status) {
@@ -1533,7 +1533,7 @@ app.get(
           data,
         })
       } finally {
-        tenantDB.close()
+//        tenantDB.close()
       }
     } catch (error: any) {
       if (error.status) {
