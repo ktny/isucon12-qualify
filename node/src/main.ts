@@ -397,8 +397,12 @@ async function authorizePlayer(tenantDB: Database, id: string): Promise<Error | 
 // 大会を取得する
 async function retrieveCompetition(tenantDB: Database, id: string): Promise<CompetitionRow | undefined> {
   try {
-    const competitionRow = await tenantDB.get<CompetitionRow>('SELECT * FROM competition WHERE id = ?', id)
-    return competitionRow
+    const [competitions] = await adminDB.query<(CompetitionRow & RowDataPacket)[]>(
+      'SELECT * FROM competition WHERE id=?',
+      id
+    )
+
+    return competitions[0]
   } catch (error) {
     throw new Error(`error Select competition: id=${id}, ${error}`)
   }
@@ -589,7 +593,7 @@ app.get(
 
         const tenantDB = await connectToTenantDB(tenant.id)
         try {
-          const competitions = await tenantDB.all<CompetitionRow[]>(
+          const [competitions] = await adminDB.query<(CompetitionRow & RowDataPacket)[]>(
             'SELECT * FROM competition WHERE tenant_id = ?',
             tenant.id
           )
@@ -818,23 +822,16 @@ app.post(
       const { title } = req.body
       const now = Math.floor(new Date().getTime() / 1000)
       const id = await dispenseID()
-      const tenantDB = await connectToTenantDB(viewer.tenantId)
+
       try {
-        await tenantDB.run(
+        await adminDB.execute(
           'INSERT INTO competition (id, tenant_id, title, finished_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
-          id,
-          viewer.tenantId,
-          title,
-          null,
-          now,
-          now
+          [id, viewer.tenantId, title, null, now, now]
         )
       } catch (error) {
         throw new Error(
           `error Insert competition: id=${id}, tenant_id=${viewer.tenantId}, title=${title}, finishedAt=null, createdAt=${now}, updatedAt=${now}, ${error}`
         )
-      } finally {
-        tenantDB.close()
       }
 
       const data: CompetitionsAddResult = {
@@ -877,6 +874,7 @@ app.post(
 
       const now = Math.floor(new Date().getTime() / 1000)
       const tenantDB = await connectToTenantDB(viewer.tenantId)
+
       try {
         const competition = await retrieveCompetition(tenantDB, competitionId)
         if (!competition) {
@@ -914,13 +912,9 @@ app.post(
 
         const visitorCount = billedPlayerIdSet.size - playerCount
 
-        await tenantDB.run(
+        await adminDB.execute(
           'UPDATE competition SET player_count = ?, visitor_count = ?, finished_at = ?, updated_at = ? WHERE id = ?',
-          playerCount,
-          visitorCount,
-          now,
-          now,
-          competitionId
+          [playerCount, visitorCount, now, now, competitionId]
         )
       } finally {
         tenantDB.close()
@@ -1094,7 +1088,7 @@ app.get(
       const reports: BillingReport[] = []
       const tenantDB = await connectToTenantDB(viewer.tenantId)
       try {
-        const competitions = await tenantDB.all<CompetitionRow[]>(
+        const [competitions] = await adminDB.query<(CompetitionRow & RowDataPacket)[]>(
           'SELECT * FROM competition WHERE tenant_id=? ORDER BY created_at DESC',
           viewer.tenantId
         )
@@ -1125,8 +1119,8 @@ app.get(
 
 async function competitionsHandler(req: Request, res: Response, viewer: Viewer, tenantDB: Database) {
   try {
-    const competitions = await tenantDB.all<CompetitionRow[]>(
-      'SELECT * FROM competition WHERE tenant_id = ? ORDER BY created_at DESC',
+    const [competitions] = await adminDB.query<(CompetitionRow & RowDataPacket)[]>(
+      'SELECT * FROM competition WHERE tenant_id=? ORDER BY created_at DESC',
       viewer.tenantId
     )
 
@@ -1214,7 +1208,10 @@ app.get(
           is_disqualified: !!p.is_disqualified,
         }
 
-        const competitions = await tenantDB.all<CompetitionRow[]>('SELECT * FROM competition WHERE tenant_id = ? ORDER BY created_at ASC', viewer.tenantId)
+        const [competitions] = await adminDB.query<(CompetitionRow & RowDataPacket)[]>(
+          'SELECT * FROM competition WHERE tenant_id=? ORDER BY created_at ASC',
+          viewer.tenantId
+        )
 
         const pss: PlayerScoreRow[] = []
 
