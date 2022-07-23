@@ -591,6 +591,88 @@ async function billingReportByCompetition(competition: CompetitionRow, tenantDB:
   }
 }
 
+// 旧: 大会ごとの課金レポートを計算する
+async function billingReportByCompetitionOld(
+  tenantDB: Database,
+  tenantId: number,
+  competition: CompetitionRow
+): Promise<BillingReport> {
+  // 大会が終了していない場合は請求金額が確定しない
+  if (!competition.finished_at) {
+    return {
+      competition_id: competition.id,
+      competition_title: competition.title,
+      player_count: 0,
+      visitor_count: 0,
+      billing_player_yen: 0,
+      billing_visitor_yen: 0,
+      billing_yen: 0,
+    }
+  }
+
+  // ランキングにアクセスした参加者のIDを取得する
+  const [vhs] = await adminDB.query<(VisitHistorySummaryRow & RowDataPacket)[]>(
+    'SELECT player_id, MIN(created_at) AS min_created_at FROM visit_history WHERE tenant_id = ? AND competition_id = ? GROUP BY player_id',
+    [tenantId, competition.id]
+  )
+
+  const billingMap: { [playerId: string]: 'player' | 'visitor' } = {}
+  for (const vh of vhs) {
+    // competition.finished_atよりもあとの場合は、終了後に訪問したとみなして大会開催内アクセス済みとみなさない
+    if (competition.finished_at !== null && competition.finished_at < vh.min_created_at) {
+      continue
+    }
+    billingMap[vh.player_id] = 'visitor'
+  }
+
+  // player_scoreを読んでいるときに更新が走ると不整合が起こるのでロックを取得する
+  const unlock = await flockByTenantID(tenantId)
+  try {
+    // スコアを登録した参加者のIDを取得する
+    const scoredPlayerIds = await tenantDB.all<{ player_id: string }[]>(
+      'SELECT DISTINCT(player_id) FROM player_score WHERE tenant_id = ? AND competition_id = ?',
+      tenantId,
+      competition.id
+    )
+    for (const pid of scoredPlayerIds) {
+      // スコアが登録されている参加者
+      billingMap[pid.player_id] = 'player'
+    }
+
+    // 大会が終了している場合のみ請求金額が確定するので計算する
+    const counts = {
+      player: 0,
+      visitor: 0,
+    }
+    if (competition.finished_at) {
+      for (const category of Object.values(billingMap)) {
+        switch (category) {
+          case 'player':
+            counts.player++
+            break
+          case 'visitor':
+            counts.visitor++
+            break
+        }
+      }
+    }
+
+    return {
+      competition_id: competition.id,
+      competition_title: competition.title,
+      player_count: counts.player,
+      visitor_count: counts.visitor,
+      billing_player_yen: 100 * counts.player,
+      billing_visitor_yen: 10 * counts.visitor,
+      billing_yen: 100 * counts.player + 10 * counts.visitor,
+    }
+  } catch (error) {
+    throw new Error(`error Select count player_score: tenantId=${tenantId}, competitionId=${competition.id}, ${error}`)
+  } finally {
+    unlock()
+  }
+}
+
 // SaaS管理者用API
 // テナントごとの課金レポートを最大10件、テナントのid降順で取得する
 // GET /api/admin/tenants/billing
@@ -649,7 +731,7 @@ app.get(
           )
 
           for (const comp of competitions) {
-            const report = await billingReportByCompetition(comp, tenantDB)
+            const report = await billingReportByCompetitionOld(tenantDB, tenant.id, comp)
             tb.billing += report.billing_yen
           }
         } finally {
@@ -931,40 +1013,40 @@ app.post(
           throw new ErrorWithStatus(404, 'competition not found')
         }
 
-        const billedPlayerIdSet: Set<string> = new Set()
-        let playerCount = 0
+        // const billedPlayerIdSet: Set<string> = new Set()
+        // let playerCount = 0
 
-        const [[visitHistories], scoredPlayerIds] = await Promise.all([
-          // ランキングにアクセスした参加者のIDを取得する
-          adminDB.query<(VisitHistorySummaryRow & RowDataPacket)[]>(
-            'SELECT player_id, MIN(created_at) AS min_created_at FROM visit_history WHERE tenant_id = ? AND competition_id = ? GROUP BY player_id',
-            [viewer.tenantId, competition.id]
-          ),
-          // スコアを登録した参加者のIDを取得する
-          tenantDB.all<{ player_id: string }[]>(
-            'SELECT DISTINCT(player_id) FROM player_score WHERE tenant_id = ? AND competition_id = ?',
-            viewer.tenantId,
-            competition.id
-          )
-        ])
+        // const [[visitHistories], scoredPlayerIds] = await Promise.all([
+        //   // ランキングにアクセスした参加者のIDを取得する
+        //   adminDB.query<(VisitHistorySummaryRow & RowDataPacket)[]>(
+        //     'SELECT player_id, MIN(created_at) AS min_created_at FROM visit_history WHERE tenant_id = ? AND competition_id = ? GROUP BY player_id',
+        //     [viewer.tenantId, competition.id]
+        //   ),
+        //   // スコアを登録した参加者のIDを取得する
+        //   tenantDB.all<{ player_id: string }[]>(
+        //     'SELECT DISTINCT(player_id) FROM player_score WHERE tenant_id = ? AND competition_id = ?',
+        //     viewer.tenantId,
+        //     competition.id
+        //   )
+        // ])
 
-        visitHistories.forEach(vh => {
-          // competition.finished_atよりもあとの場合は、終了後に訪問したとみなして大会開催内アクセス済みとみなさない
-          if (competition.finished_at !== null && competition.finished_at < vh.min_created_at) {
-            return
-          }
-          billedPlayerIdSet.add(vh.player_id)
-        })
-        scoredPlayerIds.forEach(pid => {
-          billedPlayerIdSet.add(pid.player_id) // スコアが登録されている参加者
-          playerCount++
-        })
+        // visitHistories.forEach(vh => {
+        //   // competition.finished_atよりもあとの場合は、終了後に訪問したとみなして大会開催内アクセス済みとみなさない
+        //   if (competition.finished_at !== null && competition.finished_at < vh.min_created_at) {
+        //     return
+        //   }
+        //   billedPlayerIdSet.add(vh.player_id)
+        // })
+        // scoredPlayerIds.forEach(pid => {
+        //   billedPlayerIdSet.add(pid.player_id) // スコアが登録されている参加者
+        //   playerCount++
+        // })
 
-        const visitorCount = billedPlayerIdSet.size - playerCount
+        // const visitorCount = billedPlayerIdSet.size - playerCount
 
         await adminDB.execute(
-          'UPDATE competition SET player_count = ?, visitor_count = ?, finished_at = ?, updated_at = ? WHERE id = ?',
-          [playerCount, visitorCount, now, now, competitionId]
+          'UPDATE competition SET finished_at = ?, updated_at = ? WHERE id = ?',
+          [now, now, competitionId]
         )
       } finally {
         tenantDB.close()
@@ -1144,7 +1226,7 @@ app.get(
         )
 
         for (const comp of competitions) {
-          const report = await billingReportByCompetition(comp, tenantDB)
+          const report = await billingReportByCompetitionOld(tenantDB, viewer.tenantId, comp)
           reports.push(report)
         }
       } finally {
