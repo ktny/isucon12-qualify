@@ -57,17 +57,10 @@ function tenantDBPath(id: number): string {
   return path.join(tenantDBDir, `${id.toString()}.db`)
 }
 
-const tenantDBConnections = new Map<number, Database>()
-
 // テナントDBに接続する
 async function connectToTenantDB(id: number): Promise<Database> {
-  const conn = tenantDBConnections.get(id)
-  if (conn) {
-    return conn
-  }
-
-  let db: Database
   const p = tenantDBPath(id)
+  let db: Database
   try {
     db = await open({
       filename: p,
@@ -83,7 +76,6 @@ async function connectToTenantDB(id: number): Promise<Database> {
     throw new Error(`failed to open tenant DB: ${error}`)
   }
 
-  tenantDBConnections.set(id, db)
   return db
 }
 
