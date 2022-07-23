@@ -97,7 +97,7 @@ async function dispenseID(): Promise<string> {
   for (const _ of Array(100)) {
     try {
       const [s, ns] = process.hrtime()
-      id = s + ns
+      return `${s}${ns}`.toString()
       break
     } catch (error: any) {
       // deadlock
