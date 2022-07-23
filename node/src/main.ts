@@ -276,6 +276,8 @@ const wrap =
   (req, res, next) =>
     fn(req, res, next).catch(next)
 
+let cachedCert: Buffer
+
 // リクエストヘッダをパースしてViewerを返す
 async function parseViewer(req: Request): Promise<Viewer> {
   const tokenStr = req.cookies[cookieName]
@@ -283,12 +285,9 @@ async function parseViewer(req: Request): Promise<Viewer> {
     throw new ErrorWithStatus(401, `cookie ${cookieName} is not found`)
   }
 
-  const keyFilename = getEnv('ISUCON_JWT_KEY_FILE', '../public.pem')
-  const cert = await readFile(keyFilename)
-
   let token: jwt.JwtPayload
   try {
-    token = jwt.verify(tokenStr, cert, {
+    token = jwt.verify(tokenStr, cachedCert, {
       algorithms: ['RS256'],
     }) as jwt.JwtPayload
   } catch (error) {
@@ -1556,6 +1555,9 @@ app.post(
       for (const row of tenantRows) {
         tenants.set(row.name, row)
       }
+
+      const keyFilename = getEnv('ISUCON_JWT_KEY_FILE', '../public.pem')
+      cachedCert = await readFile(keyFilename)
 
       res.status(200).json({
         status: true,
