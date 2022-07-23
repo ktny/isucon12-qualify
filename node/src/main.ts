@@ -99,6 +99,8 @@ async function dispenseID(): Promise<string> {
       await adminDB.execute<OkPacket>('UPDATE id_generator SET id = LAST_INSERT_ID(id + 1)')
       const [[result]] = await adminDB.query<number[]>('SELECT LAST_INSERT_ID()')
 
+      console.log(result)
+
       id = result
       break
     } catch (error: any) {
