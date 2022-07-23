@@ -94,25 +94,9 @@ const initID = 2678400000
 
 // システム全体で一意なIDを生成する
 async function dispenseID(): Promise<string> {
-  let id = 0
-  let lastErr: any
-  for (const _ of Array(100)) {
-    try {
-      const [s, ns] = process.hrtime()
-      id = initID + Number(`${s}${ns}`)
-      break
-    } catch (error: any) {
-      // deadlock
-      if (error.errno && error.errno === 1213) {
-        lastErr = error
-      }
-    }
-  }
-  if (id !== 0) {
-    return id.toString(16)
-  }
-
-  throw new Error(`error REPLACE INTO id_generator: ${lastErr.toString()}`)
+  const [s, ns] = process.hrtime()
+  const id = initID + Number(`${s}${ns}`)
+  return id.toString(16)
 }
 
 // カスタムエラーハンドラにステータスコード拾ってもらうエラー型
