@@ -96,10 +96,8 @@ async function dispenseID(): Promise<string> {
   let lastErr: any
   for (const _ of Array(100)) {
     try {
-      await adminDB.execute<OkPacket>('UPDATE id_generator SET id=LAST_INSERT_ID(id+1)')
-      const [[insertId]] = await adminDB.query('SELECT LAST_INSERT_ID()')
-
-      id = insertId
+      const [s, ns] = process.hrtime()
+      id = s + ns
       break
     } catch (error: any) {
       // deadlock
