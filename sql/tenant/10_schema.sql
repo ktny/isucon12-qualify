@@ -10,7 +10,8 @@ CREATE TABLE competition (
   player_count INT NOT NULL DEFAULT 0,
   visitor_count INT NOT NULL DEFAULT 0,
   created_at BIGINT NOT NULL,
-  updated_at BIGINT NOT NULL
+  updated_at BIGINT NOT NULL,
+  INDEX `tenant_id_idx` (tenant_id, created_at DESC)
 );
 
 CREATE TABLE player (
@@ -19,7 +20,8 @@ CREATE TABLE player (
   display_name TEXT NOT NULL,
   is_disqualified BOOLEAN NOT NULL,
   created_at BIGINT NOT NULL,
-  updated_at BIGINT NOT NULL
+  updated_at BIGINT NOT NULL,
+  INDEX `tenant_id_idx` (tenant_id, created_at DESC)
 );
 
 CREATE TABLE player_score (
