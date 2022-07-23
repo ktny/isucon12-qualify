@@ -1549,13 +1549,18 @@ app.post(
         lang: 'node',
       }
 
+      tenants.clear()
       const [tenantRows] = await adminDB.query<(TenantRow & RowDataPacket)[]>('SELECT * FROM tenant')
       for (const row of tenantRows) {
         tenants.set(row.name, row)
       }
 
       const keyFilename = getEnv('ISUCON_JWT_KEY_FILE', '../public.pem')
-      cachedCert = await readFile(keyFilename)
+      try {
+        cachedCert = await readFile(keyFilename)
+      } catch (e) {
+        console.log(e)
+      }
 
       res.status(200).json({
         status: true,
