@@ -1551,6 +1551,7 @@ app.post(
         lang: 'node',
       }
 
+      tenants.clear()
       const [tenantRows] = await adminDB.query<(TenantRow & RowDataPacket)[]>('SELECT * FROM tenant')
       for (const row of tenantRows) {
         tenants.set(row.name, row)
