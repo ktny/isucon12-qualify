@@ -7,8 +7,6 @@ CREATE TABLE competition (
   tenant_id BIGINT NOT NULL,
   title TEXT NOT NULL,
   finished_at BIGINT NULL,
-  player_count INT NOT NULL DEFAULT 0,
-  visitor_count INT NOT NULL DEFAULT 0,
   created_at BIGINT NOT NULL,
   updated_at BIGINT NOT NULL
 );
