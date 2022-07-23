@@ -481,7 +481,7 @@ app.post(
 
         const error = await createTenantDB(id)
         if (error) {
-          throw new Error(`error createTenantDB: id=${id} name=${name}, ${error}`)
+          throw new ErrorWithStatus(429, `error createTenantDB: id=${id} name=${name}, ${error}`)
         }
 
         await con.commit()
@@ -829,9 +829,9 @@ app.post(
           [id, viewer.tenantId, title, null, now, now]
         )
       } catch (error) {
-        throw new Error(
-          `error Insert competition: id=${id}, tenant_id=${viewer.tenantId}, title=${title}, finishedAt=null, createdAt=${now}, updatedAt=${now}, ${error}`
-        )
+        throw new ErrorWithStatus(429, `\`error Insert competition: id=${id}, tenant_id=${viewer.tenantId}, title=${title}, finishedAt=null, createdAt=${now}, updatedAt=${now}, ${error}`)
+      } finally {
+        tenantDB.close()
       }
 
       const data: CompetitionsAddResult = {
