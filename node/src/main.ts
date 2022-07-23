@@ -831,7 +831,7 @@ app.post(
       } catch (error) {
         throw new ErrorWithStatus(429, `\`error Insert competition: id=${id}, tenant_id=${viewer.tenantId}, title=${title}, finishedAt=null, createdAt=${now}, updatedAt=${now}, ${error}`)
       } finally {
-        tenantDB.close()
+        // tenantDB.close()
       }
 
       const data: CompetitionsAddResult = {
