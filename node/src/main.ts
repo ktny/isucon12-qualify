@@ -529,7 +529,57 @@ function validateTenantName(name: string): boolean {
 }
 
 // 大会ごとの課金レポートを計算する
-async function billingReportByCompetition(competition: CompetitionRow): Promise<BillingReport> {
+async function billingReportByCompetition(competition: CompetitionRow, tenantDB: Database): Promise<BillingReport> {
+  // イニシャルデータのケース
+  if (competition.finished_at && competition.player_count === 0) {
+    const now = Math.floor(new Date().getTime() / 1000)
+    const billedPlayerIdSet: Set<string> = new Set()
+    let playerCount = 0
+
+    const [[visitHistories], scoredPlayerIds] = await Promise.all([
+      // ランキングにアクセスした参加者のIDを取得する
+      adminDB.query<(VisitHistorySummaryRow & RowDataPacket)[]>(
+        'SELECT player_id, MIN(created_at) AS min_created_at FROM visit_history WHERE tenant_id = ? AND competition_id = ? GROUP BY player_id',
+        [competition.tenant_id, competition.id]
+      ),
+      // スコアを登録した参加者のIDを取得する
+      tenantDB.all<{ player_id: string }[]>(
+        'SELECT DISTINCT(player_id) FROM player_score WHERE tenant_id = ? AND competition_id = ?',
+        competition.tenant_id,
+        competition.id
+      )
+    ])
+  
+    visitHistories.forEach(vh => {
+      // competition.finished_atよりもあとの場合は、終了後に訪問したとみなして大会開催内アクセス済みとみなさない
+      if (competition.finished_at !== null && competition.finished_at < vh.min_created_at) {
+        return
+      }
+      billedPlayerIdSet.add(vh.player_id)
+    })
+    scoredPlayerIds.forEach(pid => {
+      billedPlayerIdSet.add(pid.player_id) // スコアが登録されている参加者
+      playerCount++
+    })
+  
+    const visitorCount = billedPlayerIdSet.size - playerCount
+  
+    adminDB.execute(
+      'UPDATE competition SET player_count = ?, visitor_count = ?, finished_at = ?, updated_at = ? WHERE id = ?',
+      [playerCount, visitorCount, now, now, competition.id]
+    )
+
+    return {
+      competition_id: competition.id,
+      competition_title: competition.title,
+      player_count: playerCount,
+      visitor_count: visitorCount,
+      billing_player_yen: 100 * playerCount,
+      billing_visitor_yen: 10 * visitorCount,
+      billing_yen: 100 * playerCount + 10 * visitorCount,
+    }
+  }
+
   return {
     competition_id: competition.id,
     competition_title: competition.title,
@@ -599,7 +649,7 @@ app.get(
           )
 
           for (const comp of competitions) {
-            const report = await billingReportByCompetition(comp)
+            const report = await billingReportByCompetition(comp, tenantDB)
             tb.billing += report.billing_yen
           }
         } finally {
@@ -1094,7 +1144,7 @@ app.get(
         )
 
         for (const comp of competitions) {
-          const report = await billingReportByCompetition(comp)
+          const report = await billingReportByCompetition(comp, tenantDB)
           reports.push(report)
         }
       } finally {
