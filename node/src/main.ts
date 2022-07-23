@@ -1221,7 +1221,7 @@ app.get(
           for (const comp of competitions) {
             const ps = await tenantDB.get<PlayerScoreRow>(
               // 最後にCSVに登場したスコアを採用する = row_numが一番大きいもの
-              'SELECT * FROM player_score WHERE tenant_id = ? AND competition_id = ? AND player_id = ? ORDER BY row_num DESC LIMIT 1',
+              'SELECT competition_id, score FROM player_score WHERE tenant_id = ? AND competition_id = ? AND player_id = ? ORDER BY row_num DESC LIMIT 1',
               viewer.tenantId,
               comp.id,
               p.id
