@@ -652,7 +652,8 @@ app.get(
       const ts: TenantRow[] = []
       const tenantBillings: TenantWithBilling[] = []
       try {
-        ts.push(...Array.from(tenants.values()))
+        const [tenants] = await adminDB.query<(TenantRow & RowDataPacket)[]>('SELECT * FROM tenant ORDER BY id DESC')
+        ts.push(...tenants)
       } catch (error) {
         throw new Error(`error Select tenant: ${error}`)
       }
