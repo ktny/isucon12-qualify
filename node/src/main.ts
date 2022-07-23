@@ -357,6 +357,8 @@ async function parseViewer(req: Request): Promise<Viewer> {
   }
 }
 
+const tenants = new Map<string, TenantRow>()
+
 async function retrieveTenantRowFromHeader(req: Request): Promise<TenantRow | undefined> {
   // JWTに入っているテナント名とHostヘッダのテナント名が一致しているか確認
   const baseHost = getEnv('ISUCON_BASE_HOSTNAME', '.t.isucon.dev')
@@ -373,10 +375,7 @@ async function retrieveTenantRowFromHeader(req: Request): Promise<TenantRow | un
 
   // テナントの存在確認
   try {
-    const [[tenantRow]] = await adminDB.query<(TenantRow & RowDataPacket)[]>('SELECT * FROM tenant WHERE name = ?', [
-      tenantName,
-    ])
-    return tenantRow
+    return tenants.get(tenantName)
   } catch (error) {
     throw new Error(`failed to Select tenant: name=${tenantName}, ${error}`)
   }
@@ -505,6 +504,9 @@ app.post(
             billing: 0,
           },
         }
+
+        tenants.set(name, { id, name, display_name, created_at: now, updated_at: now})
+
         res.status(200).json({
           status: true,
           data,
@@ -650,8 +652,7 @@ app.get(
       const ts: TenantRow[] = []
       const tenantBillings: TenantWithBilling[] = []
       try {
-        const [tenants] = await adminDB.query<(TenantRow & RowDataPacket)[]>('SELECT * FROM tenant ORDER BY id DESC')
-        ts.push(...tenants)
+        ts.push(...Array.from(tenants.values()))
       } catch (error) {
         throw new Error(`error Select tenant: ${error}`)
       }
@@ -1564,6 +1565,12 @@ app.post(
       const data: InitializeResult = {
         lang: 'node',
       }
+
+      const [tenantRows] = await adminDB.query<(TenantRow & RowDataPacket)[]>('SELECT * FROM tenant')
+      for (const row of tenantRows) {
+        tenants.set(row.name, row)
+      }
+
       res.status(200).json({
         status: true,
         data,
