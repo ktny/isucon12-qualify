@@ -13,6 +13,7 @@ import { open, Database } from 'sqlite'
 import { openSync, closeSync } from 'fs'
 import fsExt from 'fs-ext'
 import { parse } from 'csv-parse/sync'
+import { ulid } from 'ulid'
 
 import { useSqliteTraceHook } from './sqltrace'
 
@@ -91,27 +92,8 @@ async function createTenantDB(id: number): Promise<Error | undefined> {
 }
 
 // システム全体で一意なIDを生成する
-async function dispenseID(): Promise<string> {
-  let id = 0
-  let lastErr: any
-  for (const _ of Array(100)) {
-    try {
-      const [result] = await adminDB.execute<OkPacket>('REPLACE INTO id_generator (stub) VALUES (?)', ['a'])
-
-      id = result.insertId
-      break
-    } catch (error: any) {
-      // deadlock
-      if (error.errno && error.errno === 1213) {
-        lastErr = error
-      }
-    }
-  }
-  if (id !== 0) {
-    return id.toString(16)
-  }
-
-  throw new Error(`error REPLACE INTO id_generator: ${lastErr.toString()}`)
+function dispenseID(): string {
+  return ulid()
 }
 
 // カスタムエラーハンドラにステータスコード拾ってもらうエラー型
@@ -763,7 +745,7 @@ app.post(
         const displayNames: string[] = req.body['display_name[]']
 
         for (const displayName of displayNames) {
-          const id = await dispenseID()
+          const id = dispenseID()
           const now = Math.floor(new Date().getTime() / 1000)
 
           try {
@@ -891,7 +873,7 @@ app.post(
 
       const { title } = req.body
       const now = Math.floor(new Date().getTime() / 1000)
-      const id = await dispenseID()
+      const id = dispenseID()
       const tenantDB = await connectToTenantDB(viewer.tenantId)
       try {
         await tenantDB.run(
@@ -1055,7 +1037,7 @@ app.post(
               throw new ErrorWithStatus(400, `error parseInt: scoreStr=${scoreStr}`)
             }
 
-            const id = await dispenseID()
+            const id = dispenseID()
             const now = Math.floor(new Date().getTime() / 1000)
 
             playerScoreRows.push({
