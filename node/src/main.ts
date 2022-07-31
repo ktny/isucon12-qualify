@@ -273,6 +273,13 @@ interface PlayerScoreRow {
   updated_at: number
 }
 
+interface JoinedPlayerScoreRow {
+  player_id: string
+  score: number
+  row_num: number
+  display_name: string
+}
+
 const app = express()
 app.use(express.json())
 app.use(cookieParser())
@@ -1248,7 +1255,10 @@ app.get(
           is_disqualified: !!p.is_disqualified,
         }
 
-        const competitions = await tenantDB.all<CompetitionRow[]>('SELECT * FROM competition WHERE tenant_id = ? ORDER BY created_at ASC', viewer.tenantId)
+        const competitions = await tenantDB.all<CompetitionRow[]>(
+          'SELECT * FROM competition WHERE tenant_id = ? ORDER BY created_at ASC',
+          viewer.tenantId
+        )
 
         const pss: PlayerScoreRow[] = []
 
@@ -1360,31 +1370,23 @@ app.get(
         // player_scoreを読んでいるときに更新が走ると不整合が起こるのでロックを取得する
         const unlock = await flockByTenantID(tenant.id)
         try {
-          const pss = await tenantDB.all<PlayerScoreRow[]>(
-            'SELECT * FROM player_score WHERE tenant_id = ? AND competition_id = ? ORDER BY row_num DESC',
+          const pss = await tenantDB.all<JoinedPlayerScoreRow[]>(
+            // player.display_nameを同時に取得できるようにした
+            // row_numが最大の値しか使わないのでMAXを取るようにした
+            'SELECT ps.player_id as player_id, MAX(ps.row_num) as row_num, ps.score as score, p.display_name as display_name \
+              FROM player_score ps JOIN player p ON p.id = ps.player_id \
+              WHERE ps.tenant_id = ? AND ps.competition_id = ? GROUP BY ps.player_id',
             tenant.id,
             competition.id
           )
 
-          const scoredPlayerSet: { [player_id: string]: number } = {}
           const tmpRanks: (CompetitionRank & WithRowNum)[] = []
           for (const ps of pss) {
-            // player_scoreが同一player_id内ではrow_numの降順でソートされているので
-            // 現れたのが2回目以降のplayer_idはより大きいrow_numでスコアが出ているとみなせる
-            if (scoredPlayerSet[ps.player_id]) {
-              continue
-            }
-            scoredPlayerSet[ps.player_id] = 1
-            const p = await retrievePlayer(tenantDB, ps.player_id)
-            if (!p) {
-              throw new Error('error retrievePlayer')
-            }
-
             tmpRanks.push({
               rank: 0,
               score: ps.score,
-              player_id: p.id,
-              player_display_name: p.display_name,
+              player_id: ps.player_id,
+              player_display_name: ps.display_name,
               row_num: ps.row_num,
             })
           }
